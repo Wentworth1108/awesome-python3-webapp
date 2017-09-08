@@ -19,6 +19,7 @@ async def create_pool(loop, **kw):
 		user=kw['user'],
 		password=kw['password'],
 		db=kw['db'],
+		charset=kw.get('charset', 'utf8'),
 		autocommit=kw.get('autocommit', True),
 		maxsize=kw.get('maxsize', 10),
 		minsize=kw.get('minsize', 1),
@@ -30,7 +31,6 @@ async def select(sql, args, size=None):
 	global __pool
 	async with __pool.get() as coon:
 		async with coon.cursor(aiomysql.DictCursor) as cur:
-			logging.info('.........%s....' % sql.replace('?', '%s'))
 			await cur.execute(sql.replace('?', '%s'), args or ())
 			if size:
 				rs = await cur.fetchmany(size)
@@ -53,10 +53,10 @@ async def execute(sql, args, autocommit=True):
 		except BaseException as e:
 			if not autocommit:
 				await coon.rollback()
-				raise
+			raise
 		return affected
 
-def  create_args_string(num):
+def create_args_string(num):
 	L = []
 	for n in range(num):
 		L.append('?')
@@ -130,6 +130,7 @@ class ModelMetaclass(type):
 		attrs['__mappings__'] = mappings # 保存属性和列的映射关系
 		attrs['__table__'] = tableName
 		attrs['__primary_key__'] = primaryKey # 主键属性名
+		attrs['__fields__'] = fields # 除主键外的属性名
 		# 构造默认的SELECT, INSERT, UPDATE和DELETE语句
 		attrs['__select__'] = 'select `%s`, %s from `%s`' % (primaryKey, ', '.join(escaped_fields), tableName)
 		attrs['__insert__'] = 'insert into `%s` (%s, `%s`) values (%s)' % (tableName, ', '.join(escaped_fields), primaryKey, create_args_string(len(escaped_fields) + 1))
@@ -205,7 +206,7 @@ class Model(dict, metaclass=ModelMetaclass):
 	 @classmethod
 	 async def find(cls, pk):
 	 	' find object by primary key '
-	 	rs = await select('%s where `%s`=?' % (cls.__select__, cls.primary_key), [pk], 1)
+	 	rs = await select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
 	 	if len(rs) == 0:
 	 		return None
 	 	return cls(**rs[0])
@@ -224,8 +225,9 @@ class Model(dict, metaclass=ModelMetaclass):
 	 	if rows != 1:
 	 		logging.warn('failed to update by primary key: affected rows: %s' % rows)
 	 
-	 async def remove():
+	 async def remove(self):
 	 	args = [self.getValue(self.__primary_key__)]
+	 	logging.info(args)
 	 	rows = await execute(self.__delete__, args)
 	 	if rows != 1:
 	 		logging.warn('failed to remove by primary key: affected rows: %s' % rows)	

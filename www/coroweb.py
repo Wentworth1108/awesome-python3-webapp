@@ -95,7 +95,7 @@ class RequestHandler(object):
 				if not request.content_type:
 					return web.HTTPBadRequest(text='Missing Content-Type.')
 				ct = request.content_type.lower()
-				if ct.startwith('application/json'):
+				if ct.startswith('application/json'):
 					params = await request.json()
 					if not isinstance(params, dict):
 						return web.HTTPBadRequest(text='JSON body must be object.')
@@ -114,21 +114,21 @@ class RequestHandler(object):
 		if kw is None:
 			kw = dict(**request.match_info)
 		else:
-			if not self.has_var_kw_arg and self._named_kw_args:
+			if not self._has_var_kw_arg and self._named_kw_args:
 				# remove all unamed kw:
 				copy = dict()
 				for name in self._named_kw_args:
 					if name in kw:
 						copy[name] = kw[name]
-					kw = copy
-				# check named arg:
+				kw = copy
+			# check named arg:
 			for k, v in request.match_info.items():
 				if k in kw:
 					logging.warning('Duplicate arg name in named arg and kw args: %s' % k)
 				kw[k] = v
 		if self._has_request_arg:
 			kw['request'] = request	
-			# check required kw:
+		# check required kw:
 		if self._required_kw_args:
 			for name in self._required_kw_args:
 				if not name in kw:
